@@ -12,6 +12,13 @@
 		A10000032C12345600000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000042C12345600000004 /* ContentView.swift */; };
 		A10000042C12345600000004 /* ModelPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000052C12345600000005 /* ModelPickerView.swift */; };
 		A10000052C12345600000005 /* ARViewContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000062C12345600000006 /* ARViewContainer.swift */; };
+		/* USDZ 3D Models — Copy Bundle Resources */
+		BC0100012C12345600000001 /* stag.usdz in Resources */ = {isa = PBXBuildFile; fileRef = AC0100012C12345600000001 /* stag.usdz */; };
+		BC0100022C12345600000002 /* wolf.usdz in Resources */ = {isa = PBXBuildFile; fileRef = AC0100022C12345600000002 /* wolf.usdz */; };
+		BC0100032C12345600000003 /* bull.usdz in Resources */ = {isa = PBXBuildFile; fileRef = AC0100032C12345600000003 /* bull.usdz */; };
+		BC0100042C12345600000004 /* cow.usdz in Resources */ = {isa = PBXBuildFile; fileRef = AC0100042C12345600000004 /* cow.usdz */; };
+		BC0100052C12345600000005 /* deer.usdz in Resources */ = {isa = PBXBuildFile; fileRef = AC0100052C12345600000005 /* deer.usdz */; };
+		BC0100062C12345600000006 /* shiba.usdz in Resources */ = {isa = PBXBuildFile; fileRef = AC0100062C12345600000006 /* shiba.usdz */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +29,13 @@
 		B10000042C12345600000004 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B10000052C12345600000005 /* ModelPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPickerView.swift; sourceTree = "<group>"; };
 		B10000062C12345600000006 /* ARViewContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARViewContainer.swift; sourceTree = "<group>"; };
+		/* USDZ 3D Animal Models (must be placed in ios/ARAnimationApp/Assets/) */
+		AC0100012C12345600000001 /* stag.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = stag.usdz; sourceTree = "<group>"; };
+		AC0100022C12345600000002 /* wolf.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = wolf.usdz; sourceTree = "<group>"; };
+		AC0100032C12345600000003 /* bull.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = bull.usdz; sourceTree = "<group>"; };
+		AC0100042C12345600000004 /* cow.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = cow.usdz; sourceTree = "<group>"; };
+		AC0100052C12345600000005 /* deer.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = deer.usdz; sourceTree = "<group>"; };
+		AC0100062C12345600000006 /* shiba.usdz */ = {isa = PBXFileReference; lastKnownFileType = file; path = shiba.usdz; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +64,7 @@
 				D10000042C12345600000004 /* Models */,
 				D10000052C12345600000005 /* Views */,
 				D10000072C12345600000007 /* Supporting Files */,
+				DC0100072C12345600000007 /* Assets */,
 			);
 			path = ARAnimationApp;
 			sourceTree = "<group>";
@@ -94,6 +109,19 @@
 				B10000032C12345600000003 /* Info.plist */,
 			);
 			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		DC0100072C12345600000007 /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				AC0100012C12345600000001 /* stag.usdz */,
+				AC0100022C12345600000002 /* wolf.usdz */,
+				AC0100032C12345600000003 /* bull.usdz */,
+				AC0100042C12345600000004 /* cow.usdz */,
+				AC0100052C12345600000005 /* deer.usdz */,
+				AC0100062C12345600000006 /* shiba.usdz */,
+			);
+			path = Assets;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -154,6 +182,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BC0100012C12345600000001 /* stag.usdz in Resources */,
+				BC0100022C12345600000002 /* wolf.usdz in Resources */,
+				BC0100032C12345600000003 /* bull.usdz in Resources */,
+				BC0100042C12345600000004 /* cow.usdz in Resources */,
+				BC0100052C12345600000005 /* deer.usdz in Resources */,
+				BC0100062C12345600000006 /* shiba.usdz in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

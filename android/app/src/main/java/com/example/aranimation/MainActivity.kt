@@ -66,6 +66,9 @@ class MainActivity : AppCompatActivity() {
     // Cờ trạng thái đã neo mô hình trong thế giới thực hay chưa
     private var isModelPlaced: Boolean = false
 
+    // Cờ đánh dấu ARScene đã được cấu hình đầy đủ chưa (hỗ trợ luồng cấp quyền muộn)
+    private var isARSceneSetup: Boolean = false
+
     // Đăng ký nhận kết quả yêu cầu cấp quyền Camera Runtime
     private val cameraPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -243,6 +246,7 @@ class MainActivity : AppCompatActivity() {
      * Cấu hình ARSceneView và bắt sự kiện chạm Tap to Place
      */
     private fun setupARScene() {
+        isARSceneSetup = true
         binding.sceneView.apply {
             planeRenderer.isVisible = true
 
@@ -429,14 +433,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Khôi phục phiên AR khi người dùng quay lại ứng dụng
+     * Khôi phục phiên AR khi người dùng quay lại ứng dụng.
+     * Xử lý luồng cấp quyền muộn: Nếu ARScene chưa được khởi tạo (người dùng vừa mở App Settings
+     * để cấp quyền rồi quay lại), gọi setupARScene() thay vì chỉ resume().
      */
     override fun onResume() {
         super.onResume()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            binding.sceneView.resume()
+            if (!isARSceneSetup) {
+                // Luồng cấp quyền muộn: người dùng vừa từ App Settings cấp quyền Camera rồi quay lại
+                setupARScene()
+            } else {
+                binding.sceneView.resume()
+            }
         }
     }
 

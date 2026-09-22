@@ -55,6 +55,8 @@ struct ARViewContainer: UIViewRepresentable {
     @Binding var isModelPlaced: Bool
     @Binding var instructionText: String
     @Binding var resetTrigger: Bool
+    /// Trạng thái hoạt động của AR Session — liên kết với scenePhase từ ContentView
+    @Binding var isARSessionActive: Bool
     
     func makeUIView(context: Context) -> CustomARView {
         let arView = CustomARView(frame: .zero)
@@ -92,6 +94,16 @@ struct ARViewContainer: UIViewRepresentable {
             return
         }
         
+        // Xử lý Pause / Resume AR Session khi scenePhase thay đổi
+        if context.coordinator.lastARActiveState != isARSessionActive {
+            context.coordinator.lastARActiveState = isARSessionActive
+            if isARSessionActive {
+                uiView.resumeSession()
+            } else {
+                uiView.pauseSession()
+            }
+        }
+        
         // Chỉ xử lý khi người dùng thực sự chọn sang một con vật khác
         if context.coordinator.lastHandledModelId != selectedModel.id {
             let previousId = context.coordinator.lastHandledModelId
@@ -119,6 +131,9 @@ struct ARViewContainer: UIViewRepresentable {
         var lastHandledModelId: String = ""
         var currentAnchor: AnchorEntity?
         var currentModelEntity: (Entity & HasCollision)?
+        
+        /// Theo dõi trạng thái active/paused của AR Session để tránh gọi lại không cần thiết
+        var lastARActiveState: Bool = true
         
         /// Lưu trữ subscription Combine khi nạp USDZ bất đồng bộ
         var cancellables = Set<AnyCancellable>()
@@ -251,8 +266,11 @@ struct ARViewContainer: UIViewRepresentable {
                         print("Thông tin: Mô hình \(modelItem.displayName) không chứa track animation.")
                     }
                     
-                    // Dọn dẹp con cũ trong Anchor và thêm mô hình mới
-                    anchor.children.removeAll()
+                    // Dọn dẹp các entity con trong Anchor một cách an toàn
+                    // (gọi removeFromParent() để đảm bảo engine giải phóng bộ nhớ GPU đúng cách)
+                    for child in anchor.children {
+                        child.removeFromParent()
+                    }
                     anchor.addChild(entity)
                     
                     // Cập nhật giao diện người dùng

@@ -21,6 +21,9 @@ struct ContentView: View {
     /// Kích hoạt đặt lại không gian AR
     @State private var resetTrigger: Bool = false
     
+    /// Điều khiển AR Session: true = active, false = paused (liên kết với scenePhase)
+    @State private var isARSessionActive: Bool = true
+    
     /// Quản lý trạng thái hiển thị của ứng dụng để tối ưu pin và bộ nhớ
     @Environment(\.scenePhase) private var scenePhase
     
@@ -34,7 +37,8 @@ struct ContentView: View {
                 selectedModel: $selectedModel,
                 isModelPlaced: $isModelPlaced,
                 instructionText: $instructionText,
-                resetTrigger: $resetTrigger
+                resetTrigger: $resetTrigger,
+                isARSessionActive: $isARSessionActive
             )
             .ignoresSafeArea()
             
@@ -55,9 +59,16 @@ struct ContentView: View {
         .onChange(of: scenePhase) { newPhase in
             switch newPhase {
             case .active:
-                print("App vào trạng thái Active: AR Session sẵn sàng.")
-            case .inactive, .background:
-                print("App vào Background: Tối ưu bộ nhớ và tạm dừng AR Rendering.")
+                // Khôi phục AR Session khi app quay lại foreground
+                isARSessionActive = true
+                print("App Active: AR Session tiếp tục.")
+            case .inactive:
+                // Không làm gì khi app inactive (ví dụ: đang kéo Control Center)
+                break
+            case .background:
+                // Tạm dừng AR Session khi app vào background để tiết kiệm pin + bộ nhớ GPU
+                isARSessionActive = false
+                print("App Background: Tạm dừng AR Session.")
             @unknown default:
                 break
             }
