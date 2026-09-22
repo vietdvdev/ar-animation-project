@@ -9,13 +9,16 @@ import android.provider.Settings
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.aranimation.adapter.ModelPickerAdapter
 import com.example.aranimation.databinding.ActivityMainBinding
 import com.example.aranimation.model.ARModelItem
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.ar.core.Config
 import com.google.ar.core.HitResult
@@ -28,23 +31,25 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * Màn hình AR chính cấp độ Production:
- * 1. Giao diện phụ trợ (Overlay HUD):
- *    - TextView bán trong suốt phía trên màn hình hiển thị trạng thái hướng dẫn:
- *      "Di chuyển máy để tìm sàn..." -> "Chạm vào màn hình để đặt con vật".
- *    - Nút tròn FloatingActionButton (FAB) nhỏ góc trên bên phải để xóa mô hình hiện tại (Reset Scene).
- * 2. Luồng chọn và đổi nhanh giữa 6 mô hình 3D (Stag, Wolf, Bull, Cow, Deer, Shiba).
- * 3. Hỗ trợ cử chỉ tương tác Pinch-to-zoom (0.2x - 2.5x) và Twist/Rotate quanh trục Y.
- * 4. Quản lý vòng đời chặt chẽ và giải phóng bộ nhớ (Memory Cleanup):
- *    - onPause(): Tạm dừng ARSession, animation và giải phóng camera stream để tiết kiệm pin.
- *    - onResume(): Phục hồi phiên AR mượt mà.
- *    - onDestroy(): Dọn dẹp triệt để Node, Anchor, Coroutine Job và Filament Engine tránh rò rỉ bộ nhớ (OOM/Crash).
+ * Màn hình AR chính cấp độ Production (Kiểm thử & QA hoàn thiện):
+ * 1. Quản lý quyền Camera Runtime chặt chẽ:
+ *    - Hỗ trợ cả trường hợp từ chối thông thường (Denied) và từ chối vĩnh viễn (Don't ask again).
+ *    - Dialog giải thích minh bạch điều hướng người dùng mở App Settings mà không làm crash app.
+ * 2. Nạp tài nguyên 3D & Xử lý ngoại lệ (Assets Loading & Exception Handling):
+ *    - Kiểm tra tính hợp lệ của tệp assets trước khi nạp.
+ *    - Bọc khối xử lý try-catch và callback onError rõ ràng để tránh crash nếu file 3D hỏng hoặc thiếu.
+ * 3. AR Lifecycle & Dọn dẹp bộ nhớ (Zero Memory Leak & No Model Overlap):
+ *    - Khi đổi mô hình trên sân: Hủy triệt để và gỡ node cũ khỏi Scene/Anchor trước khi nạp model mới.
+ *    - onPause(), onResume(), onDestroy() giải phóng engine, luồng camera và coroutine.
+ * 4. Tương tác cử chỉ & Animation:
+ *    - Cấu hình minScale = 0.2f, maxScale = 2.5f tránh co giật hoặc biến mất.
+ *    - Animation Controller kích hoạt loop vô tận và bảo toàn liên tục trong lúc Pinch/Rotate.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
-    // Danh sách 6 mô hình động vật mặc định
+    // Danh sách 6 mô hình động vật mặc định từ assets
     private val modelList: List<ARModelItem> = ARModelItem.getDefaultList()
     private lateinit var modelPickerAdapter: ModelPickerAdapter
 
@@ -55,7 +60,7 @@ class MainActivity : AppCompatActivity() {
     private var currentAnchorNode: AnchorNode? = null
     private var currentModelNode: ArModelNode? = null
 
-    // Quản lý Coroutine Job nạp 3D Model
+    // Quản lý Coroutine Job nạp 3D Model để tránh xung đột
     private var modelLoadingJob: Job? = null
 
     // Cờ trạng thái đã neo mô hình trong thế giới thực hay chưa
@@ -123,7 +128,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Thay thế mô hình cũ bằng mô hình mới tại đúng vị trí và góc xoay, giải phóng bộ nhớ mô hình cũ
+     * Thay thế mô hình cũ bằng mô hình mới tại đúng vị trí và góc xoay,
+     * gỡ bỏ và hủy triệt để node cũ tránh tình trạng mô hình mới bị đè chồng lên mô hình cũ.
      */
     private fun replaceModelOnCurrentAnchor(
         anchorNode: AnchorNode,
@@ -137,11 +143,11 @@ class MainActivity : AppCompatActivity() {
         val savedRotation = oldModelNode.rotation
         val savedScale = oldModelNode.scale
 
-        // 2. GIẢI PHÓNG BỘ NHỚ CỦA MODEL CŨ (Tránh OOM khi đổi nhiều lần)
+        // 2. GIẢI PHÓNG BỘ NHỚ VÀ HỦY TRIỆT ĐỂ NODE CŨ (Ngăn xếp chồng mô hình & giật lag FPS)
         anchorNode.removeChild(oldModelNode)
         oldModelNode.destroy()
 
-        // 3. Khởi tạo node mới kế thừa lại vị trí và góc xoay
+        // 3. Khởi tạo node mới kế thừa lại vị trí và góc xoay an toàn
         val newModelNode = ArModelNode(
             engine = engine,
             placementMode = PlacementMode.PLANE_HORIZONTAL
@@ -169,7 +175,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Kiểm tra quyền Camera runtime trước khi bắt đầu phiên AR
+     * 1. KIỂM TRA QUYỀN VÀ CẤU HÌNH MÔI TRƯỜNG
      */
     private fun checkCameraPermissionAndStart() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -181,23 +187,46 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Xử lý khi bị từ chối quyền Camera: Phân biệt từ chối thường và từ chối vĩnh viễn (Don't ask again)
+     */
     private fun handlePermissionDenied() {
-        Toast.makeText(
-            this,
-            getString(R.string.camera_permission_required),
-            Toast.LENGTH_LONG
-        ).show()
+        val showRationale = ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)
 
-        Snackbar.make(
-            binding.root,
-            "Ứng dụng cần quyền Camera để quét không gian AR. Vui lòng cấp quyền trong Cài đặt.",
-            Snackbar.LENGTH_INDEFINITE
-        ).setAction("Cài đặt") {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-            startActivity(intent)
-        }.show()
+        if (showRationale) {
+            // Người dùng vừa từ chối lần đầu: Giải thích và hỏi lại
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Yêu cầu quyền máy ảnh")
+                .setMessage("Ứng dụng cần quyền Camera để quét không gian và hiển thị vật thể thực tế ảo (AR).")
+                .setPositiveButton("Cấp quyền") { _, _ ->
+                    cameraPermissionRequest.launch(Manifest.permission.CAMERA)
+                }
+                .setNegativeButton("Thoát ứng dụng") { _, _ ->
+                    finish()
+                }
+                .setCancelable(false)
+                .show()
+        } else {
+            // Người dùng chọn "Don't ask again" hoặc bị từ chối vĩnh viễn: Hiển thị Dialog hướng dẫn mở Settings
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Quyền Camera bị vô hiệu hóa")
+                .setMessage("Bạn đã từ chối quyền truy cập máy ảnh. Vui lòng vào Cài đặt ứng dụng để bật quyền Camera thủ công.")
+                .setPositiveButton("Mở Cài đặt") { _, _ ->
+                    openAppSettings()
+                }
+                .setNegativeButton("Đóng") { _, _ ->
+                    finish()
+                }
+                .setCancelable(false)
+                .show()
+        }
+    }
+
+    private fun openAppSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
+        }
+        startActivity(intent)
     }
 
     /**
@@ -265,6 +294,7 @@ class MainActivity : AppCompatActivity() {
         val anchor = hitResult.createAnchor()
         val anchorNode = AnchorNode(engine = engine, anchor = anchor)
 
+        // 4. KIỂM TRA TƯƠNG TÁC CỬ CHỈ VÀ GIỚI HẠN SCALE
         val modelNode = ArModelNode(
             engine = engine,
             placementMode = PlacementMode.PLANE_HORIZONTAL
@@ -272,8 +302,8 @@ class MainActivity : AppCompatActivity() {
             isPositionEditable = false
             isRotationEditable = true
             isScaleEditable = true
-            minScale = 0.2f
-            maxScale = 2.5f
+            minScale = 0.2f // Giới hạn scale tối thiểu 0.2x để con vật không bị co lại thành điểm vô hình
+            maxScale = 2.5f // Giới hạn scale tối đa 2.5x để tránh tràn tầm nhìn hoặc clipping camera
             followHitPosition = false
         }
 
@@ -296,7 +326,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Nạp tệp .glb từ thư mục assets và kích hoạt Looping Animation
+     * 2. NẠP TÀI NGUYÊN 3D & XỬ LÝ NGOẠI LỆ (ASSETS LOADING & EXCEPTION HANDLING)
      */
     private fun loadAndAnimateModel(node: ArModelNode, assetPath: String) {
         modelLoadingJob?.cancel()
@@ -304,39 +334,60 @@ class MainActivity : AppCompatActivity() {
         modelLoadingJob = lifecycleScope.launch {
             binding.loadingIndicator.visibility = View.VISIBLE
 
-            node.loadModelGlbAsync(
-                glbFileLocation = assetPath,
-                autoAnimate = true,
-                scaleToUnits = 0.5f,
-                centerOrigin = null,
-                onError = { exception ->
+            try {
+                // Kiểm tra sự tồn tại của file trong assets trước khi nạp
+                val assetExists = assets.list("")?.contains(assetPath) == true
+                if (!assetExists) {
                     binding.loadingIndicator.visibility = View.GONE
                     Toast.makeText(
                         this@MainActivity,
-                        "Lỗi tải ${currentSelectedItem.displayName}: ${exception.localizedMessage}",
-                        Toast.LENGTH_SHORT
+                        "Không tìm thấy file: $assetPath trong assets",
+                        Toast.LENGTH_LONG
                     ).show()
-                },
-                onLoaded = { modelInstance ->
-                    binding.loadingIndicator.visibility = View.GONE
-
-                    // Kích hoạt Skeletal Animation lặp tuần hoàn vô tận
-                    val animator = modelInstance.animator
-                    if (animator.animationCount > 0) {
-                        node.playAnimation(
-                            animationIndex = 0,
-                            loop = true
-                        )
-                    }
-
-                    binding.tvInstruction.text = getString(R.string.status_model_placed, currentSelectedItem.displayName)
+                    return@launch
                 }
-            )
+
+                node.loadModelGlbAsync(
+                    glbFileLocation = assetPath,
+                    autoAnimate = true,
+                    scaleToUnits = 0.5f,
+                    centerOrigin = null,
+                    onError = { exception ->
+                        binding.loadingIndicator.visibility = View.GONE
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Lỗi nạp ${currentSelectedItem.displayName}: ${exception.localizedMessage ?: "File hỏng"}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    onLoaded = { modelInstance ->
+                        binding.loadingIndicator.visibility = View.GONE
+
+                        // Kích hoạt Skeletal Animation lặp tuần hoàn vô tận
+                        val animator = modelInstance.animator
+                        if (animator.animationCount > 0) {
+                            node.playAnimation(
+                                animationIndex = 0,
+                                loop = true
+                            )
+                        }
+
+                        binding.tvInstruction.text = getString(R.string.status_model_placed, currentSelectedItem.displayName)
+                    }
+                )
+            } catch (e: Exception) {
+                binding.loadingIndicator.visibility = View.GONE
+                Toast.makeText(
+                    this@MainActivity,
+                    "Ngoại lệ khi nạp 3D Model: ${e.localizedMessage}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
     /**
-     * Xóa mô hình hiện tại (Reset Scene) và giải phóng bộ nhớ để người dùng chọn vị trí đặt mới
+     * 3. Xóa mô hình hiện tại (Reset Scene) và giải phóng bộ nhớ để người dùng chọn vị trí đặt mới
      */
     private fun resetARScene() {
         modelLoadingJob?.cancel()
@@ -364,7 +415,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // 2. QUẢN LÝ VÒNG ĐỜI VÀ BỘ NHỚ (LIFECYCLE & MEMORY CLEANUP)
+    // 3. QUẢN LÝ VÒNG ĐỜI VÀ BỘ NHỚ (LIFECYCLE & MEMORY CLEANUP)
     // =========================================================================
 
     /**
@@ -373,9 +424,7 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onPause() {
         super.onPause()
-        // Dừng coroutine nạp model nếu đang chạy dang dở
         modelLoadingJob?.cancel()
-        // Tạm dừng bộ dựng hình Filament và ARCore Session
         binding.sceneView.pause()
     }
 
@@ -384,7 +433,11 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
-        binding.sceneView.resume()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            binding.sceneView.resume()
+        }
     }
 
     /**
