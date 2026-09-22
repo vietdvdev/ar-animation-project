@@ -1,0 +1,18 @@
+<resources>
+    <!-- Brand & Accent Colors -->
+    <color name="primary_indigo">#6366F1</color>
+    <color name="primary_indigo_light">#818CF8</color>
+    <color name="primary_indigo_dark">#4338CA</color>
+
+    <!-- Card Backgrounds -->
+    <color name="item_card_bg_selected">#2E2A5B</color>
+    <color name="item_card_bg_default">#D91E293B</color>
+
+    <!-- Card Strokes -->
+    <color name="item_stroke_selected">#6366F1</color>
+    <color name="item_stroke_default">#33FFFFFF</color>
+
+    <!-- Texts -->
+    <color name="text_selected">#FFFFFF</color>
+    <color name="text_default">#94A3B8</color>
+</resources>

@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">AR Animation</string>
+    <string name="status_scan_plane">Di chuyển máy để tìm sàn...</string>
+    <string name="status_plane_found">Chạm vào màn hình để đặt con vật</string>
+    <string name="status_model_placed">Đang hiển thị %1$s. Dùng 2 ngón tay để Phóng to/Xoay</string>
+    <string name="camera_permission_required">Ứng dụng cần quyền Camera để khởi chạy tính năng AR.</string>
+    <string name="action_reset">Đặt lại vị trí</string>
+    <string name="content_desc_reset">Xóa mô hình hiện tại và đặt lại</string>
+</resources>

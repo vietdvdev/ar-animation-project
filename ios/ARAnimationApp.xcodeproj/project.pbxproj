@@ -1,0 +1,283 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000012C12345600000001 /* ARAnimationApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000012C12345600000001 /* ARAnimationApp.swift */; };
+		A10000022C12345600000002 /* ARModelItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000022C12345600000002 /* ARModelItem.swift */; };
+		A10000032C12345600000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000042C12345600000004 /* ContentView.swift */; };
+		A10000042C12345600000004 /* ModelPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000052C12345600000005 /* ModelPickerView.swift */; };
+		A10000052C12345600000005 /* ARViewContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000062C12345600000006 /* ARViewContainer.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B10000002C12345600000000 /* ARAnimationApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ARAnimationApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000012C12345600000001 /* ARAnimationApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARAnimationApp.swift; sourceTree = "<group>"; };
+		B10000022C12345600000002 /* ARModelItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARModelItem.swift; sourceTree = "<group>"; };
+		B10000032C12345600000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B10000042C12345600000004 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B10000052C12345600000005 /* ModelPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPickerView.swift; sourceTree = "<group>"; };
+		B10000062C12345600000006 /* ARViewContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARViewContainer.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C10000012C12345600000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D10000002C12345600000000 = {
+			isa = PBXGroup;
+			children = (
+				D10000012C12345600000001 /* ARAnimationApp */,
+				D10000022C12345600000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D10000012C12345600000001 /* ARAnimationApp */ = {
+			isa = PBXGroup;
+			children = (
+				D10000032C12345600000003 /* App */,
+				D10000042C12345600000004 /* Models */,
+				D10000052C12345600000005 /* Views */,
+				D10000072C12345600000007 /* Supporting Files */,
+			);
+			path = ARAnimationApp;
+			sourceTree = "<group>";
+		};
+		D10000022C12345600000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B10000002C12345600000000 /* ARAnimationApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D10000032C12345600000003 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B10000012C12345600000001 /* ARAnimationApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D10000042C12345600000004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				B10000022C12345600000002 /* ARModelItem.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D10000052C12345600000005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				B10000042C12345600000004 /* ContentView.swift */,
+				B10000052C12345600000005 /* ModelPickerView.swift */,
+				B10000062C12345600000006 /* ARViewContainer.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D10000072C12345600000007 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				B10000032C12345600000003 /* Info.plist */,
+			);
+			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		E10000012C12345600000001 /* ARAnimationApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F10000022C12345600000002 /* Build configuration list for PBXNativeTarget "ARAnimationApp" */;
+			buildPhases = (
+				C10000022C12345600000002 /* Sources */,
+				C10000012C12345600000001 /* Frameworks */,
+				C10000032C12345600000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ARAnimationApp;
+			productName = ARAnimationApp;
+			productReference = B10000002C12345600000000 /* ARAnimationApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		08FB7793FE84155DC02AAC07 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					E10000012C12345600000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = F10000012C12345600000001 /* Build configuration list for PBXProject "ARAnimationApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D10000002C12345600000000;
+			productRefGroup = D10000022C12345600000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E10000012C12345600000001 /* ARAnimationApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C10000032C12345600000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C10000022C12345600000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000012C12345600000001 /* ARAnimationApp.swift in Sources */,
+				A10000022C12345600000002 /* ARModelItem.swift in Sources */,
+				A10000032C12345600000003 /* ContentView.swift in Sources */,
+				A10000042C12345600000004 /* ModelPickerView.swift in Sources */,
+				A10000052C12345600000005 /* ARViewContainer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		G10000012C12345600000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		G10000022C12345600000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		G10000032C12345600000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ARAnimationApp/Supporting Files/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.aranimation.ARAnimationApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		G10000042C12345600000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ARAnimationApp/Supporting Files/Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.aranimation.ARAnimationApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F10000012C12345600000001 /* Build configuration list for PBXProject "ARAnimationApp" */;
+		F10000022C12345600000002 /* Build configuration list for PBXNativeTarget "ARAnimationApp" */;
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 08FB7793FE84155DC02AAC07 /* Project object */;
+}
