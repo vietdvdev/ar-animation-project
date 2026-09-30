@@ -1,31 +1,45 @@
 package com.example.aranimation
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.aranimation.adapter.ModelPickerAdapter
 import com.example.aranimation.databinding.ActivityMainBinding
 import com.example.aranimation.model.ARModelItem
+import com.example.aranimation.recorder.VideoRecorder
 import io.github.sceneview.math.Position
 import io.github.sceneview.node.ModelNode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
- * Màn hình 3D Model Viewer thuần túy sử dụng thư viện Sceneview (Google Filament Engine).
+ * Màn hình 3D Model Viewer thuần túy kết hợp Video Recording.
  *
  * Tính năng chính:
- * 1. Hoạt động trên mọi thiết bị Android (không yêu cầu Google ARCore hay cảm biến phần cứng AR).
+ * 1. Hoạt động trên mọi thiết bị Android (không yêu cầu Google ARCore).
  * 2. Tự động nạp mô hình 3D mặc định ("stag.glb") ngay khi mở ứng dụng.
- * 3. Hỗ trợ thao tác cử chỉ mượt mà:
- *    - Vuốt 1 ngón tay: Xoay con vật theo mọi hướng (Orbit / Rotate).
- *    - Chụm/mở 2 ngón tay (Pinch): Phóng to / Thu nhỏ mô hình (Zoom in / Zoom out).
- * 4. Tự động kích hoạt Skeleton Animation chạy lặp tuần hoàn vô tận (loop = true).
- * 5. Thanh RecyclerView cuộn ngang hỗ trợ chuyển đổi linh hoạt giữa 6 con vật khác nhau.
- * 6. Quản lý bộ nhớ tối ưu (Zero Memory Leak): Hủy triệt để ModelNode cũ trước khi nạp model mới.
+ * 3. Hỗ trợ thao tác cử chỉ: xoay (orbit) và zoom (pinch).
+ * 4. Tự động kích hoạt Skeleton Animation lặp tuần hoàn.
+ * 5. Thanh RecyclerView chọn linh hoạt 6 con vật khác nhau.
+ * 6. QUAY VIDEO (Video Recording):
+ *    - Ghi lại toàn bộ khung cảnh 3D thành file MP4 chuẩn H.264/AAC.
+ *    - Tự động xuất video vào MediaStore (Gallery).
+ *    - Đồng hồ đếm thời lượng quay thời gian thực (00:15).
+ *    - Dialog xem lại hoặc chia sẻ video ngay sau khi hoàn tất.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -44,10 +58,57 @@ class MainActivity : AppCompatActivity() {
     // Quản lý Coroutine Job nạp 3D Model bất đồng bộ để tránh xung đột
     private var modelLoadingJob: Job? = null
 
+    // =========================================================================
+    // VIDEO RECORDER & TIMER STATE
+    // =========================================================================
+    private lateinit var videoRecorder: VideoRecorder
+    private var isRecording: Boolean = false
+
+    private val timerHandler = Handler(Looper.getMainLooper())
+    private var recordingStartTime: Long = 0L
+
+    // Runnable cập nhật đồng hồ đếm thời lượng quay và hiệu ứng nhấp nháy
+    private val timerRunnable = object : Runnable {
+        override fun run() {
+            if (isRecording) {
+                val elapsedMillis = SystemClock.uptimeMillis() - recordingStartTime
+                val totalSeconds = (elapsedMillis / 1000).toInt()
+                val minutes = totalSeconds / 60
+                val seconds = totalSeconds % 60
+                binding.tvRecordTimer.text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+
+                // Hiệu ứng nhấp nháy chấm tròn ghi hình (blink dot)
+                binding.viewBlinkDot.visibility = if ((totalSeconds % 2) == 0) View.VISIBLE else View.INVISIBLE
+
+                timerHandler.postDelayed(this, 500)
+            }
+        }
+    }
+
+    // Launcher xin quyền RECORD_AUDIO trước khi quay
+    private val requestAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startVideoRecording(enableAudio = true)
+        } else {
+            Toast.makeText(
+                this,
+                getString(R.string.record_permission_required),
+                Toast.LENGTH_SHORT
+            ).show()
+            // Vẫn cho phép quay video không có tiếng
+            startVideoRecording(enableAudio = false)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Khởi tạo tiện ích quay video
+        videoRecorder = VideoRecorder(context = this, sceneView = binding.sceneView)
 
         setupModelPickerRecyclerView()
         setupListeners()
@@ -92,16 +153,137 @@ class MainActivity : AppCompatActivity() {
             loadModel(currentSelectedItem)
             Toast.makeText(this, getString(R.string.action_reset), Toast.LENGTH_SHORT).show()
         }
+
+        // Nút Quay video nổi tròn
+        binding.btnRecord.setOnClickListener {
+            toggleVideoRecording()
+        }
     }
 
     // =========================================================================
-    // 2. NẠP MÔ HÌNH 3D & ANIMATION (SCENEVIEW V2.2.1)
+    // 2. LOGIC QUAY VIDEO (START / STOP / SAVE / SHARE)
+    // =========================================================================
+
+    /**
+     * Chuyển đổi trạng thái Bắt đầu hoặc Dừng quay video
+     */
+    private fun toggleVideoRecording() {
+        if (!isRecording) {
+            checkPermissionAndStartRecording()
+        } else {
+            stopVideoRecording()
+        }
+    }
+
+    /**
+     * Kiểm tra quyền RECORD_AUDIO trước khi quay
+     */
+    private fun checkPermissionAndStartRecording() {
+        val hasAudioPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasAudioPermission) {
+            startVideoRecording(enableAudio = true)
+        } else {
+            requestAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    /**
+     * Bắt đầu ghi hình video
+     */
+    private fun startVideoRecording(enableAudio: Boolean) {
+        val started = videoRecorder.startRecording(enableAudio = enableAudio)
+        if (started) {
+            isRecording = true
+
+            // Cập nhật giao diện nút quay sang Stop icon
+            binding.btnRecord.setBackgroundResource(R.drawable.bg_record_active)
+
+            // Hiển thị HUD đếm thời gian
+            binding.cardRecordTimer.visibility = View.VISIBLE
+            binding.tvRecordTimer.text = "00:00"
+            recordingStartTime = SystemClock.uptimeMillis()
+            timerHandler.post(timerRunnable)
+
+            Toast.makeText(this, getString(R.string.record_started), Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, getString(R.string.record_saved_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Dừng ghi hình và lưu video vào MediaStore
+     */
+    private fun stopVideoRecording() {
+        isRecording = false
+        timerHandler.removeCallbacks(timerRunnable)
+
+        // Cập nhật giao diện nút quay về trạng thái chờ
+        binding.btnRecord.setBackgroundResource(R.drawable.bg_record_idle)
+        binding.cardRecordTimer.visibility = View.GONE
+
+        // Dừng và lưu file
+        videoRecorder.stopRecording { savedUri ->
+            runOnUiThread {
+                if (savedUri != null) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.record_saved_success),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    showVideoSavedDialog(savedUri)
+                } else {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.record_saved_failed),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Hiển thị popup cho phép người dùng xem ngay hoặc chia sẻ video vừa quay
+     */
+    private fun showVideoSavedDialog(videoUri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.record_saved_success))
+            .setMessage("Video 3D đã được lưu an toàn vào Thư viện ảnh (Gallery). Bạn có muốn mở xem ngay không?")
+            .setPositiveButton(getString(R.string.record_action_view)) { _, _ ->
+                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(videoUri, "video/mp4")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    startActivity(viewIntent)
+                } catch (_: Exception) {
+                    Toast.makeText(this, "Không tìm thấy ứng dụng phát video thích hợp", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNeutralButton(getString(R.string.record_action_share)) { _, _ ->
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "video/mp4"
+                    putExtra(Intent.EXTRA_STREAM, videoUri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(shareIntent, getString(R.string.record_action_share)))
+            }
+            .setNegativeButton("Đóng", null)
+            .show()
+    }
+
+    // =========================================================================
+    // 3. NẠP MÔ HÌNH 3D & ANIMATION (SCENEVIEW V2.2.1)
     // =========================================================================
 
     /**
      * Nạp mô hình 3D từ assets vào SceneView:
      * - Hủy job nạp cũ và giải phóng Node cũ để tránh tràn bộ nhớ.
-     * - Nạp bất đồng bộ file .glb bằng [createModelInstance] / [loadModelInstance].
+     * - Nạp bất đồng bộ file .glb bằng [createModelInstance].
      * - Tạo [ModelNode] với kích thước chuẩn hóa [scaleToUnits = 0.5f].
      * - Bật tương tác cử chỉ xoay và phóng to [isEditable = true].
      * - Kích hoạt animation chạy lặp tuần hoàn [playAnimation].
@@ -196,17 +378,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // 3. QUẢN LÝ VÒNG ĐỜI & GIẢI PHÓNG BỘ NHỚ (LIFECYCLE & MEMORY CLEANUP)
+    // 4. QUẢN LÝ VÒNG ĐỜI & GIẢI PHÓNG BỘ NHỚ (LIFECYCLE & MEMORY CLEANUP)
     // =========================================================================
 
     override fun onPause() {
         super.onPause()
         modelLoadingJob?.cancel()
+
+        // Tự động dừng quay và lưu video an toàn khi người dùng thoát app hoặc nhấn Home
+        if (isRecording) {
+            stopVideoRecording()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         modelLoadingJob?.cancel()
+        timerHandler.removeCallbacks(timerRunnable)
+
+        // Hủy bỏ quay khẩn cấp nếu còn sót
+        videoRecorder.cancelRecording()
 
         // Giải phóng ModelNode hiện tại
         currentModelNode?.let { node ->

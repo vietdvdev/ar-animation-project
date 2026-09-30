@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Quyền ghi âm âm thanh khi quay video -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Yêu cầu tối thiểu OpenGL ES 3.0 cho bộ dựng hình 3D (Google Filament Engine) -->
     <uses-feature
         android:glEsVersion="0x00030000"

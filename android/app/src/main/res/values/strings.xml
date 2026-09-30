@@ -5,4 +5,11 @@
     <string name="camera_permission_required">Ứng dụng cần quyền Camera (nếu sử dụng tính năng AR).</string>
     <string name="action_reset">Đặt lại góc nhìn</string>
     <string name="content_desc_reset">Đặt lại góc nhìn mô hình</string>
+    <string name="content_desc_record">Nút quay video</string>
+    <string name="record_permission_required">Ứng dụng cần quyền Ghi âm để quay video có âm thanh.</string>
+    <string name="record_started">Bắt đầu quay video...</string>
+    <string name="record_saved_success">Đã lưu video vào Thư viện ảnh!</string>
+    <string name="record_saved_failed">Lỗi: Không thể lưu video</string>
+    <string name="record_action_view">Xem video</string>
+    <string name="record_action_share">Chia sẻ</string>
 </resources>
