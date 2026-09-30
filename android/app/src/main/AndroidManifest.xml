@@ -17,19 +17,18 @@
 
     <application
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ARAnimationApp"
         tools:targetApi="34">
 
-        <!-- Khai báo ứng dụng yêu cầu cài đặt Google Play Services for AR (ARCore) -->
+        <!-- Khai báo ứng dụng yêu cầu cài đặt Google Play Services for AR (ARCore).
+             tools:replace="android:value" giải quyết Manifest Merger conflict:
+             arsceneview khai báo value="optional", app override thành value="required". -->
         <meta-data
             android:name="com.google.ar.core"
-            android:value="required" />
+            android:value="required"
+            tools:replace="android:value" />
 
         <activity
             android:name=".MainActivity"

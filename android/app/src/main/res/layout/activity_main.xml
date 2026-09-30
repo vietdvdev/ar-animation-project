@@ -77,7 +77,6 @@
         app:srcCompat="@android:drawable/ic_menu_rotate"
         app:maxImageSize="22dp"
         app:borderWidth="1dp"
-        app:borderColor="#33FFFFFF"
         android:contentDescription="@string/content_desc_reset"
         app:layout_constraintTop_toTopOf="@id/cardInstruction"
         app:layout_constraintBottom_toBottomOf="@id/cardInstruction"

@@ -16,6 +16,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // JitPack: cần thiết cho một số transitive dependency của arsceneview/Filament
+        maven { url = uri("https://jitpack.io") }
     }
 }
 

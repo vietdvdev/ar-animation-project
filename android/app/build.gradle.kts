@@ -44,6 +44,15 @@ android {
     aaptOptions {
         noCompress("glb", "gltf")
     }
+
+    // Loại trừ file license trùng lặp do Sceneview/Filament và Compose kéo vào,
+    // tránh lỗi: "More than one file was found with OS independent path"
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/DEPENDENCIES"
+        }
+    }
 }
 
 dependencies {
