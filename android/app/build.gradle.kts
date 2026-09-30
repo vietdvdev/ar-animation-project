@@ -40,13 +40,12 @@ android {
         viewBinding = true
     }
 
-    // Không nén các tệp mô hình 3D trong thư mục assets để AR engine đọc nhanh hơn
+    // Không nén các tệp mô hình 3D trong thư mục assets để engine đọc nhanh hơn
     aaptOptions {
         noCompress("glb", "gltf")
     }
 
-    // Loại trừ file license trùng lặp do Sceneview/Filament và Compose kéo vào,
-    // tránh lỗi: "More than one file was found with OS independent path"
+    // Loại trừ file trùng lặp
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -62,9 +61,13 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    // Google ARCore
-    implementation(libs.arcore)
+    // CameraX dependencies
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.video)
 
-    // Sceneview AR & 3D Rendering (Google Filament Engine)
-    implementation(libs.sceneview.ar)
+    // Sceneview 3D Rendering (Google Filament Engine thuần túy — không ARCore)
+    implementation(libs.sceneview)
 }

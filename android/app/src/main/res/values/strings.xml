@@ -1,16 +1,15 @@
 <resources>
-    <string name="app_name">AR Animation</string>
-    <string name="status_scan_plane">Di chuyển camera tìm mặt phẳng (mặt sàn)...</string>
-    <string name="status_plane_found">Đã tìm thấy sàn! Chạm vào màn hình để đặt con vật</string>
+    <string name="app_name">Camera 3D Overlay</string>
     <string name="status_loading_model">Đang tải mô hình %1$s...</string>
-    <string name="status_model_placed">Đã đặt %1$s trên sàn! Nhấn nút đỏ để quay video AR</string>
-    <string name="camera_permission_required">Ứng dụng cần quyền Camera để khởi chạy AR.</string>
+    <string name="status_model_placed">Đang hiển thị %1$s. Chạm kéo để di chuyển đứng cạnh bạn, 2 ngón xoay/zoom</string>
+    <string name="camera_permission_required">Ứng dụng cần quyền Camera để hiển thị không gian thực tế.</string>
     <string name="action_reset">Đặt lại vị trí</string>
-    <string name="content_desc_reset">Đặt lại con vật về vị trí mới</string>
-    <string name="content_desc_record">Nút quay video AR</string>
-    <string name="record_permission_required">Cần quyền Ghi âm để thu âm thanh thực tế khi quay video.</string>
-    <string name="record_started">Bắt đầu quay video AR...</string>
-    <string name="record_saved_success">Đã lưu video AR vào Thư viện!</string>
+    <string name="content_desc_reset">Đặt lại vị trí mô hình về giữa màn hình</string>
+    <string name="content_desc_switch_camera">Đổi camera trước hoặc sau</string>
+    <string name="content_desc_record">Nút quay video</string>
+    <string name="record_permission_required">Cần quyền Ghi âm để thu âm thanh khi quay video.</string>
+    <string name="record_started">Bắt đầu quay video...</string>
+    <string name="record_saved_success">Đã lưu video vào Thư viện!</string>
     <string name="record_saved_failed">Lỗi: Không thể lưu video</string>
     <string name="record_action_view">Xem video</string>
     <string name="record_action_share">Chia sẻ</string>
