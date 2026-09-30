@@ -7,8 +7,8 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <!-- 3D SceneView tiêu chuẩn: Dựng hình 3D bằng Google Filament Engine thuần túy -->
-    <io.github.sceneview.SceneView
+    <!-- AR SceneView: View hiển thị Camera AR thực tế và Bộ dựng hình 3D (Google Filament) chiếm toàn màn hình -->
+    <io.github.sceneview.ar.ARSceneView
         android:id="@+id/sceneView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

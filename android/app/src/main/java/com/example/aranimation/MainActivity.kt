@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,26 +22,34 @@ import com.example.aranimation.adapter.ModelPickerAdapter
 import com.example.aranimation.databinding.ActivityMainBinding
 import com.example.aranimation.model.ARModelItem
 import com.example.aranimation.recorder.VideoRecorder
-import io.github.sceneview.math.Position
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.ar.core.Config
+import com.google.ar.core.HitResult
+import com.google.ar.core.Plane
+import com.google.ar.core.TrackingState
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.gesture.GestureDetector
 import io.github.sceneview.node.ModelNode
+import io.github.sceneview.node.Node
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
- * Màn hình 3D Model Viewer thuần túy kết hợp Video Recording.
+ * Màn hình AR Camera kết hợp 3D Model Animation và AR Video Capture.
  *
  * Tính năng chính:
- * 1. Hoạt động trên mọi thiết bị Android (không yêu cầu Google ARCore).
- * 2. Tự động nạp mô hình 3D mặc định ("stag.glb") ngay khi mở ứng dụng.
- * 3. Hỗ trợ thao tác cử chỉ: xoay (orbit) và zoom (pinch).
+ * 1. Khung hình Camera thực tế (ARCore) hiển thị toàn màn hình kết hợp phát hiện mặt phẳng sàn (Plane Detection).
+ * 2. Chạm vào mặt phẳng (Tap-to-Place): Tạo [AnchorNode] neo chặt mô hình 3D vào tọa độ thế giới thực (World Tracking).
+ *    Người dùng có thể đứng vào khung hình cạnh con vật, lia máy xung quanh mà con vật không bị trôi nổi.
+ * 3. Hỗ trợ thao tác cử chỉ xoay và phóng to/thu nhỏ mô hình bằng 2 ngón tay.
  * 4. Tự động kích hoạt Skeleton Animation lặp tuần hoàn.
- * 5. Thanh RecyclerView chọn linh hoạt 6 con vật khác nhau.
- * 6. QUAY VIDEO (Video Recording):
- *    - Ghi lại toàn bộ khung cảnh 3D thành file MP4 chuẩn H.264/AAC.
- *    - Tự động xuất video vào MediaStore (Gallery).
- *    - Đồng hồ đếm thời lượng quay thời gian thực (00:15).
- *    - Dialog xem lại hoặc chia sẻ video ngay sau khi hoàn tất.
+ * 5. Thanh danh sách cuộn ngang hỗ trợ đổi linh hoạt giữa 6 con vật.
+ * 6. QUAY VIDEO AR CHUẨN:
+ *    - Ghi nhận trực tiếp từ Surface engine đồ họa Filament: Chỉ ghi Camera thực tế + Mô hình 3D + Bóng đổ.
+ *    - TUYỆT ĐỐI KHÔNG dính giao diện (UI controls, buttons, timer).
+ *    - Thu âm thanh môi trường qua Microphone.
+ *    - Lưu tự động vào Thư viện ảnh (DCIM/ARAnimation) kèm quét MediaScanner.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -49,14 +59,21 @@ class MainActivity : AppCompatActivity() {
     private val modelList: List<ARModelItem> = ARModelItem.getDefaultList()
     private lateinit var modelPickerAdapter: ModelPickerAdapter
 
-    // Mô hình 3D đang được chọn (mặc định: con vật đầu tiên "stag.glb")
+    // Mô hình đang được chọn (mặc định: "stag.glb")
     private var currentSelectedItem: ARModelItem = modelList.first { it.isSelected }
 
-    // Quản lý nút mô hình 3D hiện tại trên SceneView
+    // Quản lý AnchorNode (neo sàn thế giới thực) và ModelNode (con vật 3D)
+    private var currentAnchorNode: AnchorNode? = null
     private var currentModelNode: ModelNode? = null
 
-    // Quản lý Coroutine Job nạp 3D Model bất đồng bộ để tránh xung đột
+    // Trạng thái đã đặt con vật lên sàn hay chưa
+    private var isModelPlaced: Boolean = false
+
+    // Quản lý Coroutine Job nạp 3D Model bất đồng bộ
     private var modelLoadingJob: Job? = null
+
+    // Quản lý trạng thái khởi tạo AR
+    private var isARSceneSetup: Boolean = false
 
     // =========================================================================
     // VIDEO RECORDER & TIMER STATE
@@ -67,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     private val timerHandler = Handler(Looper.getMainLooper())
     private var recordingStartTime: Long = 0L
 
-    // Runnable cập nhật đồng hồ đếm thời lượng quay và hiệu ứng nhấp nháy
+    // Runnable cập nhật đồng hồ đếm thời lượng quay
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isRecording) {
@@ -77,7 +94,7 @@ class MainActivity : AppCompatActivity() {
                 val seconds = totalSeconds % 60
                 binding.tvRecordTimer.text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
-                // Hiệu ứng nhấp nháy chấm tròn ghi hình (blink dot)
+                // Nhấp nháy chấm tròn ghi hình (blink dot)
                 binding.viewBlinkDot.visibility = if ((totalSeconds % 2) == 0) View.VISIBLE else View.INVISIBLE
 
                 timerHandler.postDelayed(this, 500)
@@ -85,7 +102,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Launcher xin quyền RECORD_AUDIO trước khi quay
+    // Permission Launcher cho CAMERA
+    private val requestCameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            setupARScene()
+        } else {
+            showCameraPermissionDeniedDialog()
+        }
+    }
+
+    // Permission Launcher cho RECORD_AUDIO
     private val requestAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -97,7 +125,7 @@ class MainActivity : AppCompatActivity() {
                 getString(R.string.record_permission_required),
                 Toast.LENGTH_SHORT
             ).show()
-            // Vẫn cho phép quay video không có tiếng
+            // Vẫn cho phép quay video không có âm thanh nếu bị từ chối
             startVideoRecording(enableAudio = false)
         }
     }
@@ -112,73 +140,231 @@ class MainActivity : AppCompatActivity() {
 
         setupModelPickerRecyclerView()
         setupListeners()
-
-        // Tự động nạp ngay mô hình mặc định khi khởi động ứng dụng
-        loadModel(currentSelectedItem)
+        checkCameraPermissionAndStart()
     }
 
     // =========================================================================
-    // 1. GIAO DIỆN & DANH SÁCH CHỌN MÔ HÌNH (RECYCLERVIEW)
+    // 1. QUYỀN CAMERA & KHỞI TẠO AR SCENE
     // =========================================================================
 
+    private fun checkCameraPermissionAndStart() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            setupARScene()
+        } else {
+            requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     /**
-     * Khởi tạo RecyclerView cuộn ngang chứa danh sách chọn 6 con vật
+     * Khởi tạo cấu hình ARCore và gắn bộ lắng nghe sự kiện
      */
-    private fun setupModelPickerRecyclerView() {
-        modelPickerAdapter = ModelPickerAdapter(
-            itemList = modelList,
-            onModelSelected = { selectedModel ->
-                currentSelectedItem = selectedModel
-                loadModel(selectedModel)
+    private fun setupARScene() {
+        if (isARSceneSetup) return
+        isARSceneSetup = true
+
+        binding.sceneView.apply {
+            // Cấu hình ARCore Session: Phát hiện mặt phẳng ngang (Horizontal Planes - sàn nhà/mặt đất)
+            configureSession { session, config ->
+                config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
+                config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+                config.focusMode = Config.FocusMode.AUTO
             }
-        )
 
-        binding.rvModelPicker.apply {
-            layoutManager = LinearLayoutManager(
-                this@MainActivity,
-                LinearLayoutManager.HORIZONTAL,
-                false
+            // Hiện lưới hỗ trợ nhận diện mặt phẳng sàn
+            planeRenderer.isVisible = true
+
+            // Cập nhật trạng thái HUD hướng dẫn theo thời gian thực
+            onSessionUpdated = { _, frame ->
+                if (!isModelPlaced && !isDestroyed) {
+                    val hasTrackingPlane = frame.getUpdatedTrackables(Plane::class.java).any {
+                        it.trackingState == TrackingState.TRACKING
+                    }
+                    runOnUiThread {
+                        if (!isDestroyed && !isModelPlaced) {
+                            if (hasTrackingPlane) {
+                                binding.tvInstruction.text = getString(R.string.status_plane_found)
+                                binding.loadingIndicator.visibility = View.GONE
+                            } else {
+                                binding.tvInstruction.text = getString(R.string.status_scan_plane)
+                                binding.loadingIndicator.visibility = View.VISIBLE
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bắt sự kiện Tap-to-Place qua GestureDetector
+            setOnGestureListener(
+                onSingleTapConfirmed = { e: MotionEvent, node: Node? ->
+                    if (!isModelPlaced) {
+                        // hitTestAR: Bắn tia từ điểm chạm vào không gian AR để tìm mặt sàn
+                        val hitResult: HitResult? = binding.sceneView.hitTestAR(e.x, e.y)
+                        if (hitResult != null) {
+                            val trackable = hitResult.trackable
+                            if (trackable is Plane && trackable.isPoseInPolygon(hitResult.hitPose)) {
+                                handleTapToPlace(hitResult)
+                            }
+                        }
+                    }
+                }
             )
-            adapter = modelPickerAdapter
-            setHasFixedSize(true)
-        }
-    }
-
-    /**
-     * Cài đặt các sự kiện nút bấm giao diện
-     */
-    private fun setupListeners() {
-        // Nút Reset: Nạp lại mô hình hiện tại về vị trí và tỷ lệ chuẩn ban đầu
-        binding.fabReset.setOnClickListener {
-            loadModel(currentSelectedItem)
-            Toast.makeText(this, getString(R.string.action_reset), Toast.LENGTH_SHORT).show()
-        }
-
-        // Nút Quay video nổi tròn
-        binding.btnRecord.setOnClickListener {
-            toggleVideoRecording()
         }
     }
 
     // =========================================================================
-    // 2. LOGIC QUAY VIDEO (START / STOP / SAVE / SHARE)
+    // 2. TAP-TO-PLACE & ĐẶT MÔ HÌNH VÀO KHÔNG GIAN THỰC TẾ
     // =========================================================================
 
     /**
-     * Chuyển đổi trạng thái Bắt đầu hoặc Dừng quay video
+     * Tạo Anchor tại điểm chạm sàn và gắn mô hình con vật vào không gian
      */
+    private fun handleTapToPlace(hitResult: HitResult) {
+        // Tạo Anchor neo cố định vào mặt sàn thực tế
+        val anchor = hitResult.createAnchor()
+        val anchorNode = AnchorNode(binding.sceneView.engine, anchor)
+
+        currentAnchorNode = anchorNode
+        isModelPlaced = true
+
+        // Ẩn lưới quét mặt phẳng sau khi đã neo mô hình
+        binding.sceneView.planeRenderer.isVisible = false
+
+        // Đưa AnchorNode vào SceneView
+        binding.sceneView.addChildNode(anchorNode)
+
+        // Nạp mô hình 3D và gắn vào AnchorNode
+        loadModelAndAttach(anchorNode, currentSelectedItem)
+    }
+
+    /**
+     * Nạp file .glb bất đồng bộ từ assets và gắn vào AnchorNode
+     */
+    private fun loadModelAndAttach(anchorNode: AnchorNode, modelItem: ARModelItem) {
+        modelLoadingJob?.cancel()
+
+        binding.loadingIndicator.visibility = View.VISIBLE
+        binding.tvInstruction.text = getString(R.string.status_loading_model, modelItem.displayName)
+
+        modelLoadingJob = lifecycleScope.launch {
+            try {
+                val modelInstance = binding.sceneView.modelLoader.createModelInstance(
+                    assetFileLocation = modelItem.assetPath
+                )
+
+                if (modelInstance == null) {
+                    binding.loadingIndicator.visibility = View.GONE
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Lỗi nạp ${modelItem.displayName}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                // Khởi tạo ModelNode với kích thước chuẩn hóa 0.5m phù hợp không gian AR
+                val modelNode = ModelNode(
+                    modelInstance = modelInstance,
+                    scaleToUnits = 0.5f
+                ).apply {
+                    // Cho phép người dùng chạm để xoay hoặc phóng to/thu nhỏ
+                    isEditable = true
+                    isRotationEditable = true
+                    isScaleEditable = true
+                }
+
+                // Tự động kích hoạt Skeleton Animation lặp tuần hoàn
+                if (modelInstance.animator.animationCount > 0) {
+                    modelNode.playAnimation(animationIndex = 0, loop = true)
+                }
+
+                // Gắn con vật vào AnchorNode (neo sàn)
+                anchorNode.addChildNode(modelNode)
+                currentModelNode = modelNode
+
+                binding.loadingIndicator.visibility = View.GONE
+                binding.tvInstruction.text = getString(R.string.status_model_placed, modelItem.displayName)
+
+            } catch (e: Exception) {
+                binding.loadingIndicator.visibility = View.GONE
+                Toast.makeText(
+                    this@MainActivity,
+                    "Lỗi nạp mô hình: ${e.localizedMessage}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    /**
+     * Chuyển đổi con vật khác khi người dùng chọn trên RecyclerView
+     */
+    private fun switchModel(newModelItem: ARModelItem) {
+        currentSelectedItem = newModelItem
+
+        val anchorNode = currentAnchorNode
+        if (anchorNode == null || !isModelPlaced) {
+            // Chưa đặt sàn thì lưu lựa chọn và thông báo
+            Toast.makeText(
+                this,
+                "Đã chọn ${newModelItem.displayName}. Chạm vào sàn để đặt!",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+
+        // Gỡ bỏ con vật cũ và nạp con vật mới vào cùng vị trí AnchorNode
+        currentModelNode?.let { oldNode ->
+            anchorNode.removeChildNode(oldNode)
+            try {
+                oldNode.destroy()
+            } catch (_: Exception) {}
+            currentModelNode = null
+        }
+
+        loadModelAndAttach(anchorNode, newModelItem)
+    }
+
+    /**
+     * Đặt lại Scene để quét sàn và đặt con vật ở vị trí mới
+     */
+    private fun resetScene() {
+        modelLoadingJob?.cancel()
+
+        currentModelNode?.let { node ->
+            currentAnchorNode?.removeChildNode(node)
+            try { node.destroy() } catch (_: Exception) {}
+            currentModelNode = null
+        }
+
+        currentAnchorNode?.let { anchor ->
+            binding.sceneView.removeChildNode(anchor)
+            try { anchor.destroy() } catch (_: Exception) {}
+            currentAnchorNode = null
+        }
+
+        isModelPlaced = false
+        binding.sceneView.planeRenderer.isVisible = true
+        binding.tvInstruction.text = getString(R.string.status_scan_plane)
+        binding.loadingIndicator.visibility = View.VISIBLE
+
+        Toast.makeText(this, getString(R.string.action_reset), Toast.LENGTH_SHORT).show()
+    }
+
+    // =========================================================================
+    // 3. LOGIC QUAY VIDEO AR (START / STOP / MEDIASTORE)
+    // =========================================================================
+
     private fun toggleVideoRecording() {
         if (!isRecording) {
-            checkPermissionAndStartRecording()
+            checkAudioPermissionAndStartRecording()
         } else {
             stopVideoRecording()
         }
     }
 
-    /**
-     * Kiểm tra quyền RECORD_AUDIO trước khi quay
-     */
-    private fun checkPermissionAndStartRecording() {
+    private fun checkAudioPermissionAndStartRecording() {
         val hasAudioPermission = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.RECORD_AUDIO
@@ -191,15 +377,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Bắt đầu ghi hình video
-     */
     private fun startVideoRecording(enableAudio: Boolean) {
         val started = videoRecorder.startRecording(enableAudio = enableAudio)
         if (started) {
             isRecording = true
 
-            // Cập nhật giao diện nút quay sang Stop icon
+            // Đổi giao diện nút quay sang Stop (Active)
             binding.btnRecord.setBackgroundResource(R.drawable.bg_record_active)
 
             // Hiển thị HUD đếm thời gian
@@ -214,18 +397,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Dừng ghi hình và lưu video vào MediaStore
-     */
     private fun stopVideoRecording() {
         isRecording = false
         timerHandler.removeCallbacks(timerRunnable)
 
-        // Cập nhật giao diện nút quay về trạng thái chờ
+        // Đổi giao diện nút quay về trạng thái chờ
         binding.btnRecord.setBackgroundResource(R.drawable.bg_record_idle)
         binding.cardRecordTimer.visibility = View.GONE
 
-        // Dừng và lưu file
+        // Dừng ghi hình và lưu vào MediaStore
         videoRecorder.stopRecording { savedUri ->
             runOnUiThread {
                 if (savedUri != null) {
@@ -246,13 +426,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Hiển thị popup cho phép người dùng xem ngay hoặc chia sẻ video vừa quay
-     */
     private fun showVideoSavedDialog(videoUri: Uri) {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.record_saved_success))
-            .setMessage("Video 3D đã được lưu an toàn vào Thư viện ảnh (Gallery). Bạn có muốn mở xem ngay không?")
+            .setMessage("Video AR chất lượng cao đã được lưu vào Bộ sưu tập (DCIM/ARAnimation). Bạn có muốn mở xem ngay không?")
             .setPositiveButton(getString(R.string.record_action_view)) { _, _ ->
                 val viewIntent = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(videoUri, "video/mp4")
@@ -277,115 +454,72 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // 3. NẠP MÔ HÌNH 3D & ANIMATION (SCENEVIEW V2.2.1)
+    // 4. GIAO DIỆN & NÚT BẤM
     // =========================================================================
 
-    /**
-     * Nạp mô hình 3D từ assets vào SceneView:
-     * - Hủy job nạp cũ và giải phóng Node cũ để tránh tràn bộ nhớ.
-     * - Nạp bất đồng bộ file .glb bằng [createModelInstance].
-     * - Tạo [ModelNode] với kích thước chuẩn hóa [scaleToUnits = 0.5f].
-     * - Bật tương tác cử chỉ xoay và phóng to [isEditable = true].
-     * - Kích hoạt animation chạy lặp tuần hoàn [playAnimation].
-     * - Đưa Node vào [binding.sceneView.addChildNode].
-     *
-     * @param modelItem Dữ liệu con vật được chọn
-     */
-    private fun loadModel(modelItem: ARModelItem) {
-        // 1. Hủy bỏ tác vụ nạp mô hình đang thực hiện dở dang (nếu có)
-        modelLoadingJob?.cancel()
-
-        // 2. Gỡ bỏ và giải phóng bộ nhớ của Node cũ khỏi SceneView
-        currentModelNode?.let { oldNode ->
-            binding.sceneView.removeChildNode(oldNode)
-            try {
-                oldNode.destroy()
-            } catch (_: Exception) {}
-            currentModelNode = null
-        }
-
-        // Cập nhật trạng thái HUD hiển thị
-        binding.loadingIndicator.visibility = View.VISIBLE
-        binding.tvInstruction.text = getString(R.string.status_loading_model, modelItem.displayName)
-
-        // 3. Khởi chạy Coroutine nạp mô hình bất đồng bộ
-        modelLoadingJob = lifecycleScope.launch {
-            try {
-                // Kiểm tra sự tồn tại của tệp trong assets trước khi nạp
-                val assetExists = assets.list("")?.contains(modelItem.assetPath) == true
-                if (!assetExists) {
-                    binding.loadingIndicator.visibility = View.GONE
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Không tìm thấy tệp: ${modelItem.assetPath} trong assets",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    return@launch
-                }
-
-                // Nạp ModelInstance từ assets
-                val modelInstance = binding.sceneView.modelLoader.createModelInstance(
-                    assetFileLocation = modelItem.assetPath
-                )
-
-                if (modelInstance == null) {
-                    binding.loadingIndicator.visibility = View.GONE
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Lỗi nạp ${modelItem.displayName}: Không thể khởi tạo ModelInstance",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    return@launch
-                }
-
-                // Khởi tạo ModelNode với kích thước hiển thị cân đối trong không gian 3D
-                val modelNode = ModelNode(
-                    modelInstance = modelInstance,
-                    scaleToUnits = 0.5f // Chuẩn hóa kích thước vừa vặn trong màn hình
-                ).apply {
-                    // Đặt vị trí mô hình tại tâm của không gian quan sát
-                    position = Position(x = 0.0f, y = -0.1f, z = 0.0f)
-
-                    // Bật cử chỉ tương tác 3D: cho phép chạm vuốt để xoay và phóng to/thu nhỏ
-                    isEditable = true
-                    isRotationEditable = true
-                    isScaleEditable = true
-                }
-
-                // Tự động kích hoạt Skeleton Animation chạy lặp tuần hoàn vô tận
-                if (modelInstance.animator.animationCount > 0) {
-                    modelNode.playAnimation(animationIndex = 0, loop = true)
-                }
-
-                // Đưa mô hình vào SceneView để hiển thị
-                binding.sceneView.addChildNode(modelNode)
-                currentModelNode = modelNode
-
-                // Cập nhật giao diện HUD hướng dẫn cử chỉ
-                binding.loadingIndicator.visibility = View.GONE
-                binding.tvInstruction.text =
-                    getString(R.string.status_model_placed, modelItem.displayName)
-
-            } catch (e: Exception) {
-                binding.loadingIndicator.visibility = View.GONE
-                Toast.makeText(
-                    this@MainActivity,
-                    "Ngoại lệ khi nạp 3D Model: ${e.localizedMessage}",
-                    Toast.LENGTH_SHORT
-                ).show()
+    private fun setupModelPickerRecyclerView() {
+        modelPickerAdapter = ModelPickerAdapter(
+            itemList = modelList,
+            onModelSelected = { selectedModel ->
+                switchModel(selectedModel)
             }
+        )
+
+        binding.rvModelPicker.apply {
+            layoutManager = LinearLayoutManager(
+                this@MainActivity,
+                LinearLayoutManager.HORIZONTAL,
+                false
+            )
+            adapter = modelPickerAdapter
+            setHasFixedSize(true)
         }
     }
 
+    private fun setupListeners() {
+        binding.fabReset.setOnClickListener {
+            resetScene()
+        }
+
+        binding.btnRecord.setOnClickListener {
+            toggleVideoRecording()
+        }
+    }
+
+    private fun showCameraPermissionDeniedDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.camera_permission_required))
+            .setMessage("Ứng dụng cần quyền Camera để hiển thị không gian AR. Vui lòng cấp quyền trong Cài đặt.")
+            .setPositiveButton("Mở Cài đặt") { _, _ ->
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", packageName, null)
+                }
+                startActivity(intent)
+            }
+            .setNegativeButton("Thoát") { _, _ -> finish() }
+            .setCancelable(false)
+            .show()
+    }
+
     // =========================================================================
-    // 4. QUẢN LÝ VÒNG ĐỜI & GIẢI PHÓNG BỘ NHỚ (LIFECYCLE & MEMORY CLEANUP)
+    // 5. LIFECYCLE & GIẢI PHÓNG BỘ NHỚ
     // =========================================================================
+
+    override fun onResume() {
+        super.onResume()
+        if (!isARSceneSetup &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            setupARScene()
+        }
+    }
 
     override fun onPause() {
         super.onPause()
         modelLoadingJob?.cancel()
 
-        // Tự động dừng quay và lưu video an toàn khi người dùng thoát app hoặc nhấn Home
+        // Tự động dừng quay và lưu video an toàn khi thoát app hoặc bấm Home
         if (isRecording) {
             stopVideoRecording()
         }
@@ -396,19 +530,18 @@ class MainActivity : AppCompatActivity() {
         modelLoadingJob?.cancel()
         timerHandler.removeCallbacks(timerRunnable)
 
-        // Hủy bỏ quay khẩn cấp nếu còn sót
         videoRecorder.cancelRecording()
 
-        // Giải phóng ModelNode hiện tại
         currentModelNode?.let { node ->
-            try {
-                binding.sceneView.removeChildNode(node)
-                node.destroy()
-            } catch (_: Exception) {}
+            try { node.destroy() } catch (_: Exception) {}
             currentModelNode = null
         }
 
-        // Dọn dẹp tài nguyên SceneView và Filament Engine an toàn
+        currentAnchorNode?.let { anchor ->
+            try { anchor.destroy() } catch (_: Exception) {}
+            currentAnchorNode = null
+        }
+
         try {
             binding.sceneView.destroy()
         } catch (_: Exception) {}

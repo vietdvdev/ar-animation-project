@@ -2,8 +2,8 @@ package com.example.aranimation.recorder
 
 import android.content.ContentValues
 import android.content.Context
-import android.media.CamcorderProfile
 import android.media.MediaRecorder
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -19,13 +19,17 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Tiện ích ghi hình video 3D / AR từ SceneView thành tệp định dạng MP4.
+ * Tiện ích ghi hình video chuẩn AR (AR Video Capture) từ SceneView / ARSceneView.
  *
  * Tính năng chính:
- * 1. Thu xuất bề mặt hiển thị trực tiếp từ GPU của SceneView thông qua `startMirroring` / `stopMirroring`.
- * 2. Cấu hình MediaRecorder chuẩn: MP4 (H.264, AAC), 30 fps, bitrate 6-10 Mbps.
- * 3. Hỗ trợ ghi âm kèm theo nếu được cấp quyền `RECORD_AUDIO`.
- * 4. Tự động lưu video vào MediaStore (Thư viện Gallery) theo chuẩn Scoped Storage của Android 10+.
+ * 1. Ghi hình trực tiếp từ GPU của SceneView thông qua API `startMirroring` / `stopMirroring`:
+ *    - Khung hình Camera thực tế (ARCore Camera Stream) được vẽ làm nền (Background).
+ *    - Mô hình 3D cử động (ModelNode) được vẽ đè lên theo đúng góc nhìn, ánh sáng và bóng đổ.
+ *    - Toàn bộ giao diện người dùng (nút bấm, HUD, timer) nằm ở view hierarchy riêng trên Android View
+ *      nên TUYỆT ĐỐI KHÔNG bị ghi vào luồng video.
+ * 2. Cấu hình MediaRecorder chuẩn: MP4 (Video: H.264, Audio: AAC MIC), 30 fps, bitrate 8-10 Mbps.
+ * 3. Chèn thẳng video vào MediaStore: thư mục DCIM/ARAnimation (hoặc Movies/ARAnimation).
+ * 4. Gọi MediaScannerConnection để video lập tức hiển thị trong ứng dụng Bộ sưu tập / Google Photos.
  */
 class VideoRecorder(
     private val context: Context,
@@ -46,37 +50,37 @@ class VideoRecorder(
     var isRecording: Boolean = false
         private set
 
-    /** Kích thước quay video mặc định hoặc đồng bộ theo SceneView */
+    /** Kích thước quay video tự động tính toán theo khung hình render của SceneView */
     var videoWidth: Int = 1080
     var videoHeight: Int = 1920
 
     /**
-     * Bắt đầu ghi hình video từ SceneView.
+     * Bắt đầu ghi hình AR video từ SceneView.
      *
-     * @param enableAudio Có thu âm micro hay không (cần quyền RECORD_AUDIO)
-     * @return true nếu bắt đầu thành công, false nếu lỗi khởi tạo
+     * @param enableAudio Có thu âm thanh môi trường qua Microphone không
+     * @return true nếu bắt đầu thành công, false nếu lỗi
      */
-    fun startRecording(enableAudio: Boolean = false): Boolean {
+    fun startRecording(enableAudio: Boolean = true): Boolean {
         if (isRecording) {
-            Log.w(TAG, "Quá trình quay video đang diễn ra.")
+            Log.w(TAG, "Tiến trình quay video AR đang diễn ra.")
             return false
         }
 
         try {
-            // Xác định độ phân giải video dựa trên kích thước thực tế của SceneView
+            // Xác định độ phân giải dựa trên kích thước thực tế của SceneView
             val viewWidth = sceneView.width.let { if (it > 0) it else 1080 }
             val viewHeight = sceneView.height.let { if (it > 0) it else 1920 }
 
-            // Làm tròn chẵn kích thước (bắt buộc cho H.264 encoder)
+            // Đảm bảo kích thước chẵn theo yêu cầu của H.264 video encoder
             videoWidth = if (viewWidth % 2 == 0) viewWidth else viewWidth - 1
             videoHeight = if (viewHeight % 2 == 0) viewHeight else viewHeight - 1
 
             // Tạo file tạm trong bộ nhớ cache riêng của ứng dụng
             val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val tempFileName = "VID_TEMP_${timeStamp}.mp4"
+            val tempFileName = "AR_TEMP_${timeStamp}.mp4"
             tempVideoFile = File(context.cacheDir, tempFileName)
 
-            // Khởi tạo MediaRecorder tương thích mọi phiên bản Android
+            // Khởi tạo MediaRecorder tương thích phiên bản Android
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
             } else {
@@ -109,7 +113,8 @@ class VideoRecorder(
             val surface = recorder.surface
             recordingSurface = surface
 
-            // Gắn Surface vào SceneView thông qua API startMirroring của Filament engine
+            // Gắn Surface vào SceneView engine thông qua startMirroring
+            // Bề mặt render của Filament sẽ tự động nhân bản (mirror) toàn bộ camera feed + 3D nodes vào Surface này
             sceneView.startMirroring(
                 surface = surface,
                 left = 0,
@@ -118,23 +123,23 @@ class VideoRecorder(
                 height = videoHeight
             )
 
-            // Bắt đầu ghi
+            // Bắt đầu ghi hình
             recorder.start()
             isRecording = true
-            Log.d(TAG, "Bắt đầu quay video thành công: ${videoWidth}x${videoHeight}")
+            Log.d(TAG, "Bắt đầu quay video AR thành công: ${videoWidth}x${videoHeight}")
             return true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Lỗi khi bắt đầu quay video: ${e.message}", e)
+            Log.e(TAG, "Lỗi khi bắt đầu quay video AR: ${e.message}", e)
             releaseRecorder()
             return false
         }
     }
 
     /**
-     * Dừng ghi hình và tự động lưu video vào MediaStore (Gallery).
+     * Dừng ghi hình và lưu video vào MediaStore (Thư viện Gallery DCIM/ARAnimation).
      *
-     * @param onVideoSaved Callback trả về Uri của video trong Thư viện ảnh (hoặc null nếu thất bại)
+     * @param onVideoSaved Callback trả về Uri của video (hoặc null nếu lỗi)
      */
     fun stopRecording(onVideoSaved: (Uri?) -> Unit) {
         if (!isRecording) {
@@ -144,7 +149,7 @@ class VideoRecorder(
         }
 
         try {
-            // Ngừng mirror hình ảnh từ SceneView
+            // Ngừng mirror luồng đồ họa SceneView
             recordingSurface?.let { surface ->
                 try {
                     sceneView.stopMirroring(surface)
@@ -164,11 +169,11 @@ class VideoRecorder(
             isRecording = false
         }
 
-        // Xuất file tạm sang Thư viện MediaStore công khai
+        // Xuất file tạm sang Thư viện MediaStore công khai (DCIM/ARAnimation)
         val targetFile = tempVideoFile
         if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
             val savedUri = exportToGallery(targetFile)
-            // Xóa file tạm sau khi đã export
+            // Xóa file tạm sau khi đã export thành công
             try {
                 targetFile.delete()
             } catch (_: Exception) {}
@@ -180,10 +185,11 @@ class VideoRecorder(
     }
 
     /**
-     * Xuất tệp MP4 sang MediaStore.Video để hiển thị ngay trong Gallery.
+     * Xuất tệp MP4 sang MediaStore.Video để lưu trữ lâu dài và quét MediaScanner.
      */
     private fun exportToGallery(videoFile: File): Uri? {
-        val fileName = "AR_3D_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())}.mp4"
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val fileName = "AR_CAPTURE_${timeStamp}.mp4"
         val contentValues = ContentValues().apply {
             put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
             put(MediaStore.Video.Media.MIME_TYPE, VIDEO_MIME_TYPE)
@@ -191,7 +197,7 @@ class VideoRecorder(
             put(MediaStore.Video.Media.DATE_MODIFIED, System.currentTimeMillis() / 1000)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/3DAnimalViewer")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/ARAnimation")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -213,14 +219,21 @@ class VideoRecorder(
                 }
             }
 
-            // Gỡ cờ IS_PENDING khi ghi xong để ứng dụng khác thấy ngay video
+            // Gỡ cờ IS_PENDING khi ghi xong để ứng dụng thư viện quét thấy video
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 contentValues.clear()
                 contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
                 resolver.update(itemUri, contentValues, null, null)
             }
 
-            Log.d(TAG, "Đã lưu video thành công vào MediaStore: $itemUri")
+            // Kích hoạt MediaScannerConnection để file hiển thị ngay lập tức trong Gallery/Google Photos
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(videoFile.absolutePath),
+                arrayOf(VIDEO_MIME_TYPE)
+            ) { _, _ -> }
+
+            Log.d(TAG, "Đã lưu video AR thành công vào MediaStore: $itemUri")
             itemUri
         } catch (e: IOException) {
             Log.e(TAG, "Lỗi khi ghi dữ liệu sang MediaStore: ${e.message}", e)

@@ -2,8 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Quyền ghi âm âm thanh khi quay video -->
+    <!-- Quyền truy cập máy ảnh để vận hành AR Camera Stream -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Quyền ghi âm âm thanh môi trường khi quay video -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Khai báo tính năng AR (ARCore) -->
+    <uses-feature
+        android:name="android.hardware.camera.ar"
+        android:required="true" />
 
     <!-- Yêu cầu tối thiểu OpenGL ES 3.0 cho bộ dựng hình 3D (Google Filament Engine) -->
     <uses-feature
@@ -16,6 +24,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ARAnimationApp"
         tools:targetApi="34">
+
+        <!-- Khai báo ARCore meta-data: tools:replace để override từ library -->
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="required"
+            tools:replace="android:value" />
 
         <activity
             android:name=".MainActivity"

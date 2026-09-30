@@ -62,6 +62,9 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    // Sceneview 3D Rendering (Google Filament Engine) — không phụ thuộc ARCore
-    implementation(libs.sceneview)
+    // Google ARCore
+    implementation(libs.arcore)
+
+    // Sceneview AR & 3D Rendering (Google Filament Engine)
+    implementation(libs.sceneview.ar)
 }

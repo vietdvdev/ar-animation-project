@@ -6,6 +6,7 @@ appcompat = "1.6.1"
 material = "1.11.0"
 constraintlayout = "2.1.4"
 lifecycleRuntimeKtx = "2.7.0"
+arcore = "1.42.0"
 sceneview = "2.2.1"
 
 [libraries]
@@ -14,7 +15,8 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
-sceneview = { group = "io.github.sceneview", name = "sceneview", version.ref = "sceneview" }
+arcore = { group = "com.google.ar", name = "core", version.ref = "arcore" }
+sceneview-ar = { group = "io.github.sceneview", name = "arsceneview", version.ref = "sceneview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
