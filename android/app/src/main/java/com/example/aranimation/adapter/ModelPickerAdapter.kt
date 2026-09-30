@@ -70,7 +70,7 @@ class ModelPickerAdapter(
 
             // Xử lý sự kiện click chuyển đổi item
             binding.root.setOnClickListener {
-                val currentPos = adapterPosition
+                val currentPos = bindingAdapterPosition
                 if (currentPos != RecyclerView.NO_POSITION && currentPos != selectedPosition) {
                     val previousPos = selectedPosition
 

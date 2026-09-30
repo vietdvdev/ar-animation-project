@@ -7,8 +7,8 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <!-- AR SceneView: View hiển thị Camera AR và Bộ dựng hình 3D (Google Filament) chiếm toàn màn hình -->
-    <io.github.sceneview.ar.ARSceneView
+    <!-- 3D SceneView tiêu chuẩn: Dựng hình 3D bằng Google Filament Engine thuần túy -->
+    <io.github.sceneview.SceneView
         android:id="@+id/sceneView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -55,16 +55,16 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/status_scan_plane"
                 android:textColor="@android:color/white"
                 android:textSize="13sp"
                 android:fontFamily="sans-serif-medium"
                 android:maxLines="2"
-                android:ellipsize="end" />
+                android:ellipsize="end"
+                tools:text="Đang tải mô hình..." />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- NÚT TRÒN FLOATINGACTIONBUTTON NHỎ GÓC TRÊN BÊN PHẢI ĐỂ RESET SCENE -->
+    <!-- NÚT TRÒN FLOATINGACTIONBUTTON GÓC TRÊN BÊN PHẢI ĐỂ RESET GÓC NHÌN -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabReset"
         android:layout_width="wrap_content"
