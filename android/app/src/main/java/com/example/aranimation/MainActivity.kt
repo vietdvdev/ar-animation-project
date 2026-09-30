@@ -28,7 +28,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.aranimation.adapter.ModelPickerAdapter
 import com.example.aranimation.databinding.ActivityMainBinding
 import com.example.aranimation.model.ARModelItem
-import com.example.aranimation.recorder.VideoRecorder
+import com.example.aranimation.recorder.Camera3DRecorder
 import com.google.android.filament.View as FilamentView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import io.github.sceneview.math.Position
@@ -40,14 +40,11 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Màn hình Non-AR Camera 3D Overlay kết hợp Video Recording.
- *
- * Kiến trúc 3 tầng:
- * 1. Tầng nền (Background): CameraX PreviewView hiển thị luồng máy ảnh thực tế (hỗ trợ chuyển đổi Camera trước/sau).
- * 2. Tầng mô hình (Overlay): io.github.sceneview.SceneView với nền trong suốt (transparent), hiển thị con vật 3D
- *    đang cử động animation lặp tuần hoàn và cho phép người dùng kéo rê (drag) di chuyển đặt cạnh người thật trong khung hình.
- * 3. Tầng giao diện (UI Controls): Nằm trên cùng, gồm nút đổi Camera trước/sau, nút Reset, nút Quay video,
- *    đồng hồ đếm thời gian và thanh chọn 6 con vật.
+ * Màn hình NATIVE CAMERA RECORDING kết hợp 3D Model Overlay:
+ * - TUYỆT ĐỐI KHÔNG dùng MediaProjection, không có pop-up hệ thống hỏi quyền ghi màn hình.
+ * - Bấm quay là quay ngay lập tức giống TikTok / Instagram.
+ * - Video chỉ gồm luồng Camera thực tế + Mô hình 3D từ [captureContainer], hoàn toàn loại bỏ giao diện UI.
+ * - Hỗ trợ đổi Camera Trước/Sau, xoay/zoom/kéo rê con vật đặt cạnh người thật và animation cử động lặp vô tận.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -61,10 +58,10 @@ class MainActivity : AppCompatActivity() {
     private val modelList: List<ARModelItem> = ARModelItem.getDefaultList()
     private lateinit var modelPickerAdapter: ModelPickerAdapter
 
-    // Mô hình đang được chọn (mặc định: "stag.glb")
+    // Mô hình đang được chọn (mặc định: con vật đầu tiên "stag.glb")
     private var currentSelectedItem: ARModelItem = modelList.first { it.isSelected }
 
-    // Quản lý nút mô hình 3D hiện tại trên SceneView
+    // Quản lý nút mô hình 3D trên SceneView
     private var currentModelNode: ModelNode? = null
 
     // Quản lý Coroutine Job nạp 3D Model bất đồng bộ
@@ -78,15 +75,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraExecutor: ExecutorService
 
     // =========================================================================
-    // VIDEO RECORDER & TIMER STATE
+    // NATIVE 3D RECORDER & TIMER STATE
     // =========================================================================
-    private lateinit var videoRecorder: VideoRecorder
+    private lateinit var camera3DRecorder: Camera3DRecorder
     private var isRecording: Boolean = false
 
     private val timerHandler = Handler(Looper.getMainLooper())
     private var recordingStartTime: Long = 0L
 
-    // Runnable cập nhật đồng hồ đếm thời lượng quay
+    // Cập nhật nhãn thời lượng quay (00:01, 00:02...)
     private val timerRunnable = object : Runnable {
         override fun run() {
             if (isRecording) {
@@ -96,7 +93,7 @@ class MainActivity : AppCompatActivity() {
                 val seconds = totalSeconds % 60
                 binding.tvRecordTimer.text = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
-                // Nhấp nháy chấm tròn đỏ
+                // Nhấp nháy chấm đỏ ghi hình
                 binding.viewBlinkDot.visibility = if ((totalSeconds % 2) == 0) View.VISIBLE else View.INVISIBLE
 
                 timerHandler.postDelayed(this, 500)
@@ -133,17 +130,22 @@ class MainActivity : AppCompatActivity() {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // 1. Cấu hình SceneView trong suốt (Transparent Overlay)
+        // 1. Cấu hình SceneView nền trong suốt nằm trong captureContainer
         setupTransparentSceneView()
 
-        // 2. Khởi tạo tiện ích quay video
-        videoRecorder = VideoRecorder(context = this, sceneView = binding.sceneView)
+        // 2. Khởi tạo Camera3DRecorder ghi hình Native từ captureContainer
+        camera3DRecorder = Camera3DRecorder(
+            context = this,
+            captureContainer = binding.captureContainer,
+            cameraPreview = binding.cameraPreview,
+            sceneView = binding.sceneView
+        )
 
-        // 3. Khởi tạo giao diện và các bộ lắng nghe
+        // 3. Khởi tạo UI điều khiển
         setupModelPickerRecyclerView()
         setupListeners()
 
-        // 4. Kiểm tra quyền và khởi chạy camera
+        // 4. Kiểm tra quyền và khởi chạy Camera
         checkAndRequestPermissions()
 
         // 5. Nạp mô hình 3D mặc định
@@ -154,42 +156,32 @@ class MainActivity : AppCompatActivity() {
     // 1. CẤU HÌNH SCENEVIEW NỀN TRONG SUỐT (TRANSPARENT OVERLAY)
     // =========================================================================
 
-    /**
-     * Cấu hình SceneView hiển thị đè trong suốt lên Camera PreviewView:
-     * - Đặt SurfaceView dạng TRANSLUCENT và ZOrderMediaOverlay để nhìn xuyên qua camera.
-     * - Đặt Filament View BlendMode sang TRANSLUCENT.
-     * - Tắt vẽ bầu trời (clear color / skybox) để lộ luồng camera phía sau.
-     */
     private fun setupTransparentSceneView() {
         val sceneView = binding.sceneView
 
-        // Cho phép SurfaceView trong suốt và nằm đè lên PreviewView của Camera
         try {
             if (sceneView is SurfaceView) {
                 sceneView.holder.setFormat(PixelFormat.TRANSLUCENT)
                 sceneView.setZOrderMediaOverlay(true)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Cấu hình PixelFormat.TRANSLUCENT: ${e.message}")
+            Log.w(TAG, "Lỗi thiết lập SurfaceView TRANSLUCENT: ${e.message}")
         }
 
-        // Cấu hình Filament Engine sang BlendMode.TRANSLUCENT
         try {
             sceneView.view.blendMode = FilamentView.BlendMode.TRANSLUCENT
-            // Tắt vẽ bầu trời hoặc phông nền xám
             sceneView.renderer.clearOptions = sceneView.renderer.clearOptions.apply {
                 clear = true
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Cấu hình Filament BlendMode TRANSLUCENT: ${e.message}")
+            Log.w(TAG, "Lỗi thiết lập Filament TRANSLUCENT: ${e.message}")
         }
 
-        // Xử lý kéo rê (Drag to Move) mô hình 3D trên màn hình camera
         setupModelDragGesture()
     }
 
     /**
-     * Hỗ trợ chạm kéo 1 ngón tay trên màn hình để di chuyển con vật đứng cạnh người thật
+     * Hỗ trợ chạm kéo 1 ngón tay trên màn hình để di chuyển con vật đứng cạnh người
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun setupModelDragGesture() {
@@ -211,7 +203,6 @@ class MainActivity : AppCompatActivity() {
                         val dy = event.y - lastTouchY
 
                         currentModelNode?.let { node ->
-                            // Chuyển đổi độ dịch chuyển pixel màn hình sang tọa độ 3D
                             val sensitivity = 0.0015f
                             val currentPos = node.position
                             node.position = Position(
@@ -236,7 +227,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // 2. KHỞI TẠO VÀ CHUYỂN ĐỔI CAMERAX
+    // 2. KHỞI TẠO VÀ ĐỔI CAMERAX TRƯỚC / SAU
     // =========================================================================
 
     private fun checkAndRequestPermissions() {
@@ -261,9 +252,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Khởi tạo CameraX Provider và hiển thị lên PreviewView
-     */
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
@@ -271,22 +259,19 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider = cameraProviderFuture.get()
                 bindCameraUseCases()
             } catch (e: Exception) {
-                Log.e(TAG, "Lỗi khi lấy CameraProvider: ${e.message}", e)
-                Toast.makeText(this, "Không thể kết nối máy ảnh: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "Lỗi lấy CameraProvider: ${e.message}", e)
+                Toast.makeText(this, "Không thể kết nối camera: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /**
-     * Gắn use case Preview vào Lifecycle của Activity
-     */
     private fun bindCameraUseCases() {
         val provider = cameraProvider ?: return
 
         val preview = Preview.Builder()
             .build()
             .also {
-                it.setSurfaceProvider(binding.viewFinder.surfaceProvider)
+                it.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
             }
 
         try {
@@ -302,9 +287,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Lật camera giữa Camera Trước và Camera Sau
-     */
     private fun switchCamera() {
         cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
             CameraSelector.DEFAULT_FRONT_CAMERA
@@ -320,9 +302,6 @@ class MainActivity : AppCompatActivity() {
     // 3. NẠP MÔ HÌNH 3D & ANIMATION LẶP VÔ TẬN
     // =========================================================================
 
-    /**
-     * Nạp mô hình 3D từ assets và hiển thị trong không gian overlay
-     */
     private fun loadModel(modelItem: ARModelItem) {
         modelLoadingJob?.cancel()
 
@@ -358,27 +337,22 @@ class MainActivity : AppCompatActivity() {
                     binding.loadingIndicator.visibility = View.GONE
                     Toast.makeText(
                         this@MainActivity,
-                        "Lỗi nạp ${modelItem.displayName}: Không thể khởi tạo ModelInstance",
+                        "Lỗi nạp ${modelItem.displayName}",
                         Toast.LENGTH_SHORT
                     ).show()
                     return@launch
                 }
 
-                // Khởi tạo ModelNode với kích thước hiển thị chuẩn
                 val modelNode = ModelNode(
                     modelInstance = modelInstance,
                     scaleToUnits = 0.6f
                 ).apply {
-                    // Đặt vị trí ban đầu ở nửa dưới màn hình để dễ nhìn thấy cạnh người
                     position = Position(x = 0.0f, y = -0.3f, z = 0.0f)
-
-                    // Bật tương tác cử chỉ: xoay và phóng to/thu nhỏ
                     isEditable = true
                     isRotationEditable = true
                     isScaleEditable = true
                 }
 
-                // Tự động kích hoạt Skeleton Animation chạy lặp tuần hoàn vô tận
                 if (modelInstance.animator.animationCount > 0) {
                     modelNode.playAnimation(animationIndex = 0, loop = true)
                 }
@@ -400,9 +374,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Đặt lại vị trí con vật về chính giữa màn hình
-     */
     private fun resetModelPosition() {
         currentModelNode?.let { node ->
             node.position = Position(x = 0.0f, y = -0.3f, z = 0.0f)
@@ -413,31 +384,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // 4. QUAY VIDEO (MEDIA RECORDER & MEDIASTORE)
+    // 4. QUAY VIDEO NATIVE (KHÔNG MEDIA PROJECTION - BẤM QUAY LÀ CHẠY NGAY)
     // =========================================================================
 
     private fun toggleVideoRecording() {
         if (!isRecording) {
-            startVideoRecording()
+            startNativeRecording()
         } else {
-            stopVideoRecording()
+            stopNativeRecording()
         }
     }
 
-    private fun startVideoRecording() {
+    private fun startNativeRecording() {
         val hasAudioPermission = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        val started = videoRecorder.startRecording(enableAudio = hasAudioPermission)
+        val started = camera3DRecorder.start(enableAudio = hasAudioPermission)
         if (started) {
             isRecording = true
 
-            // Đổi giao diện nút quay sang Stop (Active)
+            // Đổi nút quay sang Stop icon
             binding.btnRecord.setBackgroundResource(R.drawable.bg_record_active)
 
-            // Hiển thị HUD đếm thời gian
+            // Kích hoạt đồng hồ đếm thời gian
             binding.cardRecordTimer.visibility = View.VISIBLE
             binding.tvRecordTimer.text = "00:00"
             recordingStartTime = SystemClock.uptimeMillis()
@@ -449,21 +420,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopVideoRecording() {
+    private fun stopNativeRecording() {
         isRecording = false
         timerHandler.removeCallbacks(timerRunnable)
 
-        // Đổi giao diện nút quay về trạng thái chờ
+        // Trả giao diện về bình thường
         binding.btnRecord.setBackgroundResource(R.drawable.bg_record_idle)
         binding.cardRecordTimer.visibility = View.GONE
 
-        // Dừng ghi hình và lưu video
-        videoRecorder.stopRecording { savedUri ->
+        camera3DRecorder.stop { savedUri ->
             runOnUiThread {
                 if (savedUri != null) {
                     Toast.makeText(
                         this,
-                        getString(R.string.record_saved_success),
+                        "Đã lưu video vào Bộ sưu tập: $savedUri",
                         Toast.LENGTH_LONG
                     ).show()
                     showVideoSavedDialog(savedUri)
@@ -481,7 +451,7 @@ class MainActivity : AppCompatActivity() {
     private fun showVideoSavedDialog(videoUri: Uri) {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.record_saved_success))
-            .setMessage("Video Camera + 3D Model đã được lưu an toàn vào Thư viện ảnh (Gallery). Bạn có muốn mở xem ngay không?")
+            .setMessage("Video Camera + 3D Model đã được lưu vào Bộ sưu tập (DCIM/ARVideo). Bạn có muốn mở xem ngay không?")
             .setPositiveButton(getString(R.string.record_action_view)) { _, _ ->
                 val viewIntent = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(videoUri, "video/mp4")
@@ -490,7 +460,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     startActivity(viewIntent)
                 } catch (_: Exception) {
-                    Toast.makeText(this, "Không tìm thấy ứng dụng phát video", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Không tìm thấy trình phát video", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNeutralButton(getString(R.string.record_action_share)) { _, _ ->
@@ -506,7 +476,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // 5. GIAO DIỆN & SỰ KIỆN NÚT BẤM
+    // 5. GIAO DIỆN & BỘ LẮNG NGHE
     // =========================================================================
 
     private fun setupModelPickerRecyclerView() {
@@ -530,17 +500,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Nút đổi Camera Trước/Sau
         binding.fabSwitchCamera.setOnClickListener {
             switchCamera()
         }
 
-        // Nút Reset vị trí con vật về tâm
         binding.fabReset.setOnClickListener {
             resetModelPosition()
         }
 
-        // Nút Quay video nổi tròn
         binding.btnRecord.setOnClickListener {
             toggleVideoRecording()
         }
@@ -549,7 +516,7 @@ class MainActivity : AppCompatActivity() {
     private fun showPermissionDeniedDialog() {
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.camera_permission_required))
-            .setMessage("Ứng dụng cần quyền Camera để hiển thị không gian thực tế đằng sau mô hình 3D. Vui lòng cấp quyền trong Cài đặt.")
+            .setMessage("Ứng dụng cần quyền Camera để ghi nhận hình ảnh thực tế. Vui lòng cấp quyền trong Cài đặt.")
             .setPositiveButton("Mở Cài đặt") { _, _ ->
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.fromParts("package", packageName, null)
@@ -570,7 +537,7 @@ class MainActivity : AppCompatActivity() {
         modelLoadingJob?.cancel()
 
         if (isRecording) {
-            stopVideoRecording()
+            stopNativeRecording()
         }
     }
 
@@ -579,7 +546,7 @@ class MainActivity : AppCompatActivity() {
         modelLoadingJob?.cancel()
         timerHandler.removeCallbacks(timerRunnable)
 
-        videoRecorder.cancelRecording()
+        camera3DRecorder.cancel()
         cameraExecutor.shutdown()
 
         currentModelNode?.let { node ->

@@ -7,20 +7,29 @@
     android:layout_height="match_parent"
     android:background="@android:color/black">
 
-    <!-- LỚP 1: TẦNG NỀN (BACKGROUND) - CAMERAX PREVIEW HIỂN THỊ KHUNG HÌNH THỜI GIAN THỰC -->
-    <androidx.camera.view.PreviewView
-        android:id="@+id/viewFinder"
+    <!-- LỚP 1: KHUNG QUAY THUẦN (CAPTURE CONTAINER) - CHỈ GỒM CAMERA VÀ MÔ HÌNH 3D, KHÔNG DÍNH UI -->
+    <FrameLayout
+        android:id="@+id/captureContainer"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent">
 
-    <!-- LỚP 2: TẦNG MÔ HÌNH (OVERLAY) - 3D SCENEVIEW TRONG SUỐT ĐÈ LÊN TRÊN CAMERA -->
-    <io.github.sceneview.SceneView
-        android:id="@+id/sceneView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        <!-- CAMERA PREVIEW SỬ DỤNG TEXTUREVIEW (COMPATIBLE MODE) ĐỂ HỖ TRỢ TRÍCH XUẤT PIXELCOPY/FRAME MƯỢT MÀ -->
+        <androidx.camera.view.PreviewView
+            android:id="@+id/cameraPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:implementationMode="compatible" />
 
-    <!-- LỚP 3: TẦNG GIAO DIỆN (UI CONTROLS) - NẰM TRÊN CÙNG -->
+        <!-- 3D SCENEVIEW NỀN TRONG SUỐT ĐÈ LÊN TRÊN CAMERA -->
+        <io.github.sceneview.SceneView
+            android:id="@+id/sceneView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- LỚP 2: GIAO DIỆN ĐIỀU KHIỂN (UI CONTROLS) - NẰM TRÊN CÙNG VÀ HOÀN TOÀN TÁCH BIỆT KHỎI KHUNG QUAY -->
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/uiContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
@@ -71,7 +80,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- NÚT ĐỔI CAMERA TRƯỚC / SAU (SWITCH CAMERA) Ở GÓC TRÊN BÊN PHẢI -->
+        <!-- NÚT ĐỔI CAMERA TRƯỚC / SAU Ở GÓC TRÊN BÊN PHẢI -->
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/fabSwitchCamera"
             android:layout_width="wrap_content"
@@ -107,7 +116,7 @@
             app:layout_constraintBottom_toBottomOf="@id/cardInstruction"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- NHÃN ĐẾM THỜI LƯỢNG QUAY VIDEO (RECORD TIMER HUD) -->
+        <!-- NHÃN ĐẾM THỜI LƯỢNG QUAY VIDEO (RECORD TIMER) Ở GIỮA TRÊN -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardRecordTimer"
             android:layout_width="wrap_content"
@@ -150,7 +159,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- NÚT QUAY PHIM NỔI (RECORD BUTTON) HÌNH TRÒN LỚN NẰM PHÍA TRÊN THANH CHỌN CON VẬT -->
+        <!-- NÚT QUAY PHIM NỔI (RECORD BUTTON) TRÒN LỚN Ở PHÍA DƯỚI -->
         <View
             android:id="@+id/btnRecord"
             android:layout_width="72dp"
@@ -164,7 +173,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- THANH TRƯỢT NGANG CHỌN 6 CON VẬT (RECYCLERVIEW) SÁT MÉP ĐÁY MÀN HÌNH -->
+        <!-- THANH TRƯỢT NGANG CHỌN 6 CON VẬT (RECYCLERVIEW) SÁT MÉP ĐÁY -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvModelPicker"
             android:layout_width="0dp"
